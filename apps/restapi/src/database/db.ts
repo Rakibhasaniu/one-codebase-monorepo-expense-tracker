@@ -19,7 +19,7 @@ export type Account = {
     updatedAt: Date
 }
 
-export type TransactionType = 'deposit' | 'expense' | 'transfer_in' | 'transfer_out'
+export type TransactionType = 'deposit' | 'expense' | 'transfer_in' | 'transfer_out' | 'income'
 
 export type Transaction = {
     id: string

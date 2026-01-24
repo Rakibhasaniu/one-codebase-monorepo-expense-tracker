@@ -149,8 +149,8 @@ app.post('/accounts', authenticateToken, async (req: Request, res: Response) => 
     }
 });
 
-app.get('/accounts', authenticateToken, async (req: Request, res: Response) => {
-    const userId = (req as any).user.id;
+app.get('/accounts/:userid', authenticateToken, async (req: Request, res: Response) => {
+    const userId = req.params.userid;
     const accounts = db.chain.get('accounts').filter((a: any) => a.userId === userId).value();
     return res.status(200).json(accounts);
 });
@@ -193,34 +193,43 @@ app.delete('/accounts/:id', authenticateToken, async (req: Request, res: Respons
 
 // *** Transaction Management *************
 
-app.post('/transactions/deposit', authenticateToken, async (req: Request, res: Response) => {
+app.post('/accounts/:accountId/deposit', authenticateToken, async (req: Request, res: Response) => {
     try {
-        const { accountId, amount, description } = req.body;
-        const userId = (req as any).user.id;
-
+        const { amount, description, currency } = req.body;
+        const accountId = req.params.accountId as string;
+        const userId = (req as any).user.id; // Correctly get userId from authenticated user
+        if (!amount || !currency) return res.status(400).json({ message: "Amount and currency are required" });
         if (amount <= 0) return res.status(400).json({ message: "Amount must be positive" });
 
         const account = db.chain.get('accounts').find((a: any) => a.id === accountId && a.userId === userId).value();
         if (!account) return res.status(404).json({ message: "Account not found" });
+        if (account.currency !== currency) return res.status(400).json({ message: "Currency mismatch" });
 
-        account.balance += amount;
-        account.updatedAt = new Date();
+        const updatedAccount = {
+            ...account,
+            balance: account.balance + amount,
+            updatedAt: new Date()
+        };
+
+        // Corrected lowdb update: find by predicate and assign
+        db.chain.get('accounts').find((a: any) => a.id === accountId).assign(updatedAccount).value();
+        await db.write();
 
         const transaction = {
             id: crypto.randomUUID(),
             accountId,
             amount,
-            type: 'deposit',
-            description: description || 'Deposit',
+            type: 'income' as const,
+            description: description || 'income',
             date: new Date()
         };
 
-        db.data.transactions.push(transaction as Transaction);
+        db.chain.get('transactions').push(transaction).value();
         await db.write();
 
         return res.status(200).json({
             message: "Deposit successful",
-            balance: account.balance,
+            balance: updatedAccount.balance,
             transaction
         });
     } catch (error) {
@@ -228,10 +237,11 @@ app.post('/transactions/deposit', authenticateToken, async (req: Request, res: R
     }
 });
 
-app.post('/transactions/expense', authenticateToken, async (req: Request, res: Response) => {
+app.post('/accounts/:accountId/expense', authenticateToken, async (req: Request, res: Response) => {
     try {
-        const { accountId, amount, description } = req.body;
+        const { amount, description } = req.body;
         const userId = (req as any).user.id;
+        const accountId = req.params.accountId as string;
 
         if (amount <= 0) return res.status(400).json({ message: "Amount must be positive" });
 
@@ -242,24 +252,30 @@ app.post('/transactions/expense', authenticateToken, async (req: Request, res: R
             return res.status(400).json({ message: "Insufficient funds" });
         }
 
-        account.balance -= amount;
-        account.updatedAt = new Date();
+        const updatedAccount = {
+            ...account,
+            balance: account.balance - amount,
+            updatedAt: new Date()
+        };
+
+        db.chain.get('accounts').find((a: any) => a.id === accountId).assign(updatedAccount).value();
+        await db.write();
 
         const transaction = {
             id: crypto.randomUUID(),
             accountId,
             amount,
-            type: 'expense',
+            type: 'expense' as const,
             description: description || 'Expense',
             date: new Date()
         };
 
-        db.data.transactions.push(transaction as Transaction);
+        db.chain.get('transactions').push(transaction).value();
         await db.write();
 
         return res.status(200).json({
             message: "Expense recorded",
-            balance: account.balance,
+            balance: updatedAccount.balance,
             transaction
         });
     } catch (error) {
@@ -285,14 +301,15 @@ app.get('/transactions/:accountId', authenticateToken, async (req: Request, res:
     return res.status(200).json(transactions);
 });
 
-app.post('/transactions/transfer', authenticateToken, async (req: Request, res: Response) => {
+app.post('/accounts/:accountId/transfer', authenticateToken, async (req: Request, res: Response) => {
     try {
-        const { sourceAccountId, destinationAccountId, amount } = req.body;
+        const { destinationAccountId, amount } = req.body;
         const userId = (req as any).user.id;
+        const accountId = req.params.accountId as string;
 
         if (amount <= 0) return res.status(400).json({ message: "Amount must be positive" });
 
-        const sourceAccount = db.chain.get('accounts').find((a: any) => a.id === sourceAccountId && a.userId === userId).value();
+        const sourceAccount = db.chain.get('accounts').find((a: any) => a.id === accountId && a.userId === userId).value();
         const destAccount = db.chain.get('accounts').find((a: any) => a.id === destinationAccountId && a.userId === userId).value();
 
         if (!sourceAccount || !destAccount) {
@@ -310,7 +327,7 @@ app.post('/transactions/transfer', authenticateToken, async (req: Request, res: 
 
         const outTransaction = {
             id: Date.now().toString() + '_out',
-            accountId: sourceAccountId,
+            accountId,
             amount,
             type: 'transfer_out',
             description: `Transfer to ${destinationAccountId}`,
@@ -322,7 +339,7 @@ app.post('/transactions/transfer', authenticateToken, async (req: Request, res: 
             accountId: destinationAccountId,
             amount,
             type: 'transfer_in',
-            description: `Transfer from ${sourceAccountId}`,
+            description: `Transfer from ${sourceAccount}`,
             date: new Date()
         };
 
