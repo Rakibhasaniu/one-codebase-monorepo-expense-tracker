@@ -15,18 +15,19 @@ export type Account = {
     userId: string
     currency: Currency
     balance: number
-    lastUpdated: Date
+    createdAt: Date
+    updatedAt: Date
 }
 
-export type TransactionType = 'income' | 'expense' | 'transfer'
+export type TransactionType = 'deposit' | 'expense' | 'transfer_in' | 'transfer_out'
 
 export type Transaction = {
     id: string
     accountId: string
     amount: number
     type: TransactionType
-    lastBalance: number
-    createdAt: Date
+    description: string
+    date: Date
 }
 
 export type DB = {
