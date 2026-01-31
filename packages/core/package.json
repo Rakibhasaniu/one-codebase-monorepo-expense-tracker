@@ -1,0 +1,27 @@
+{
+  "name": "@ocm/core",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "clean": "rimraf dist",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src --ext ts --ext tsx --ext js --ext jsx",
+    "prettier": "prettier --write src --ext ts --ext tsx --ext js --ext jsx",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.3.3",
+    "rimraf": "^6.0.1",
+    "@ocm/typescript-config": "workspace:*",
+    "@ocm/eslint-config": "workspace:*"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
